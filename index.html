@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>과제 관리 웹앱</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* 모바일 터치 및 폰트 부드러움 최적화 */
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    input, textarea, select {
+      user-select: auto;
+    }
+    /* 스크롤바 숨김 처리 */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex justify-center items-stretch antialiased">
+  <!-- 모바일 뷰 컨테이너 (최대 너비 md로 스마트폰 앱 느낌 제공) -->
+  <div class="w-full max-w-md bg-white min-h-screen flex flex-col shadow-2xl relative">
+    
+    <!-- 1. 상단: 앱 이름 및 헤더 영역 -->
+    <header class="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-200 px-5 pt-6 pb-4">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="p-2 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+              <i class="fa-solid fa-calendar-check text-lg"></i>
+            </span>
+            <h1 class="text-xl font-bold tracking-tight text-slate-900">과제 관리 웹앱</h1>
+          </div>
+          <p id="currentDateText" class="text-xs text-slate-500 mt-1 pl-1">2026년 9월 29일 화요일</p>
+        </div>
+        <!-- 정렬 버튼 -->
+        <button id="sortToggleBtn" class="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 active:scale-95 transition text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-arrow-down-short-wide text-indigo-600"></i>
+          <span id="sortLabel">마감순</span>
+        </button>
+      </div>
+
+      <!-- 상태 요약 및 필터 탭 -->
+      <div class="flex gap-2 text-xs font-medium pt-1">
+        <button onclick="setFilter('all')" id="filter-all" class="flex-1 py-2 rounded-xl bg-slate-900 text-white font-semibold shadow-sm transition">
+          전체 <span id="count-all" class="opacity-80 ml-1">0</span>
+        </button>
+        <button onclick="setFilter('pending')" id="filter-pending" class="flex-1 py-2 rounded-xl bg-slate-100 text-slate-600 font-medium hover:bg-slate-200 transition">
+          진행중 <span id="count-pending" class="text-indigo-600 ml-1 font-bold">0</span>
+        </button>
+        <button onclick="setFilter('completed')" id="filter-completed" class="flex-1 py-2 rounded-xl bg-slate-100 text-slate-600 font-medium hover:bg-slate-200 transition">
+          완료 <span id="count-completed" class="text-emerald-600 ml-1 font-bold">0</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. 가운데: 과제 목록 영역 -->
+    <main class="flex-1 overflow-y-auto p-4 space-y-3 pb-28 no-scrollbar" id="taskListContainer">
+      <!-- 과제 목록이 비었을 때 화면 -->
+      <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 text-center px-4">
+        <div class="w-16 h-16 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-2xl mb-4">
+          <i class="fa-solid fa-clipboard-check"></i>
+        </div>
+        <h3 class="font-bold text-slate-700 text-base">등록된 과제가 없습니다</h3>
+        <p class="text-xs text-slate-400 mt-1">하단의 [+ 과제 추가] 버튼을 눌러<br>새로운 과제를 등록해 보세요.</p>
+      </div>
+
+      <!-- 과제 아이템들이 동적으로 주입되는 리스트 컨테이너 -->
+      <ul id="assignmentList" class="space-y-3"></ul>
+    </main>
+
+    <!-- 3. 아래: 하단 고정 추가 버튼 -->
+    <div class="fixed bottom-0 max-w-md w-full p-4 bg-gradient-to-t from-white via-white/95 to-transparent z-10 flex justify-center">
+      <button id="openAddModalBtn" class="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-bold shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 transition duration-150">
+        <i class="fa-solid fa-plus text-base"></i>
+        <span>새 과제 추가하기</span>
+      </button>
+    </div>
+
+    <!-- 과제 추가 모달 팝업 -->
+    <div id="modalBackdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-30 hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+      <div id="modalBox" class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl transform transition-transform duration-300 translate-y-full sm:translate-y-0">
+        
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+            과제 추가하기
+          </h2>
+          <button id="closeModalBtn" class="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <form id="addAssignmentForm" class="space-y-4">
+          <!-- 과목명 입력 -->
+          <div>
+            <label for="subjectInput" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              과목명 <span class="text-rose-500">*</span>
+            </label>
+            <input 
+              type="text" 
+              id="subjectInput" 
+              placeholder="예: 컴퓨터구조, 경제학원론, 국어" 
+              required
+              class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm bg-slate-50 focus:bg-white transition"
+            >
+            <!-- 빠른 과목 선택 칩 -->
+            <div class="flex flex-wrap gap-1.5 mt-2" id="quickSubjects">
+              <span class="text-[11px] text-slate-400 self-center mr-1">추천:</span>
+              <button type="button" class="quick-chip text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 px-2.5 py-1 rounded-lg text-slate-600 transition">전공</button>
+              <button type="button" class="quick-chip text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 px-2.5 py-1 rounded-lg text-slate-600 transition">교양</button>
+              <button type="button" class="quick-chip text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 px-2.5 py-1 rounded-lg text-slate-600 transition">팀프로젝트</button>
+              <button type="button" class="quick-chip text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 px-2.5 py-1 rounded-lg text-slate-600 transition">실습</button>
+            </div>
+          </div>
+
+          <!-- 과제 제목 / 내용 -->
+          <div>
+            <label for="titleInput" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              과제 내용 <span class="text-rose-500">*</span>
+            </label>
+            <input 
+              type="text" 
+              id="titleInput" 
+              placeholder="예: 3장 연습문제 풀이 제출, 레포트" 
+              required
+              class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm bg-slate-50 focus:bg-white transition"
+            >
+          </div>
+
+          <!-- 마감일 및 마감 시간 선택 -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="dueDateInput" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                마감일 <span class="text-rose-500">*</span>
+              </label>
+              <input 
+                type="date" 
+                id="dueDateInput" 
+                required
+                class="w-full px-3 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm bg-slate-50 focus:bg-white transition"
+              >
+            </div>
+            <div>
+              <label for="dueTimeInput" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                마감시간
+              </label>
+              <input 
+                type="time" 
+                id="dueTimeInput" 
+                value="23:59"
+                class="w-full px-3 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm bg-slate-50 focus:bg-white transition"
+              >
+            </div>
+          </div>
+
+          <!-- 등록 버튼 -->
+          <div class="pt-3">
+            <button 
+              type="submit" 
+              class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-bold text-sm shadow-md shadow-indigo-100 transition"
+            >
+              등록 완료
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 토스트 메시지 (alert 대용 안내창) -->
+    <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-medium shadow-xl flex items-center gap-2 transition-all duration-300 opacity-0 pointer-events-none transform -translate-y-3">
+      <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+      <span id="toastMessage">작업이 완료되었습니다.</span>
+    </div>
+
+  </div>
+
+  <script>
+    /* =========================================================
+       과제 마감 관리 애플리케이션 스크립트
+       - 로컬 스토리지 데이터 영구 보관 (외부 서버 X)
+       - 실시간 D-Day 계산 알고리즘
+       - 반응형 및 인터랙션 핸들러
+       ========================================================= */
+
+    // 로컬 스토리지 키
+    const STORAGE_KEY = 'assignment_manager_data_v1';
+
+    // 전역 상태
+    let assignments = [];
+    let currentFilter = 'all'; // 'all', 'pending', 'completed'
+    let currentSort = 'deadline'; // 'deadline', 'created'
+
+    // DOM 요소 캐싱
+    const taskListContainer = document.getElementById('taskListContainer');
+    const assignmentList = document.getElementById('assignmentList');
+    const emptyState = document.getElementById('emptyState');
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const modalBox = document.getElementById('modalBox');
+    const openAddModalBtn = document.getElementById('openAddModalBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const addAssignmentForm = document.getElementById('addAssignmentForm');
+    const subjectInput = document.getElementById('subjectInput');
+    const titleInput = document.getElementById('titleInput');
+    const dueDateInput = document.getElementById('dueDateInput');
+    const dueTimeInput = document.getElementById('dueTimeInput');
+    const sortToggleBtn = document.getElementById('sortToggleBtn');
+    const sortLabel = document.getElementById('sortLabel');
+    const currentDateText = document.getElementById('currentDateText');
+
+    // 오늘 날짜 텍스트 업데이트 (한국어 포맷)
+    function updateCurrentDateHeader() {
+      const now = new Date();
+      const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const date = now.getDate();
+      const dayName = days[now.getDay()];
+      currentDateText.innerText = `${year}년 ${month}월 ${date}일 ${dayName}`;
+
+      // 오늘 날짜를 Date 인풋 기본값으로 자동 지정
+      const formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+      dueDateInput.value = formattedDate;
+    }
+
+    // D-Day 계산 함수
+    function calculateDDay(dueDateStr, dueTimeStr) {
+      const now = new Date();
+      
+      // 마감 날짜 및 시간 파싱
+      const time = dueTimeStr ? dueTimeStr : '23:59';
+      const [year, month, day] = dueDateStr.split('-').map(Number);
+      const [hours, minutes] = time.split(':').map(Number);
+      
+      const dueDateTime = new Date(year, month - 1, day, hours, minutes, 0);
+      
+      // 날짜 단위 차이 계산 (자정 기준)
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const dueMidnight = new Date(year, month - 1, day).getTime();
+      const diffDays = Math.round((dueMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
+      
+      // 정밀 시간 차이 (만료 여부 확인)
+      const isPast = dueDateTime.getTime() < now.getTime();
+
+      let badgeText = '';
+      let badgeStyle = '';
+      let subMessage = '';
+
+      if (isPast) {
+        badgeText = '마감됨';
+        badgeStyle = 'bg-slate-200 text-slate-500 border border-slate-300';
+        subMessage = '제출 기한이 지났습니다';
+      } else if (diffDays === 0) {
+        badgeText = 'D-Day';
+        badgeStyle = 'bg-rose-500 text-white animate-pulse shadow-rose-200 shadow-md';
+        subMessage = `오늘 ${time} 마감 예정`;
+      } else if (diffDays === 1) {
+        badgeText = 'D-1';
+        badgeStyle = 'bg-amber-500 text-white shadow-amber-200 shadow-sm';
+        subMessage = `내일 ${time} 마감`;
+      } else if (diffDays <= 3) {
+        badgeText = `D-${diffDays}`;
+        badgeStyle = 'bg-orange-500 text-white shadow-orange-200 shadow-sm';
+        subMessage = `${diffDays}일 남음`;
+      } else if (diffDays <= 7) {
+        badgeText = `D-${diffDays}`;
+        badgeStyle = 'bg-indigo-600 text-white';
+        subMessage = `${diffDays}일 남음`;
+      } else {
+        badgeText = `D-${diffDays}`;
+        badgeStyle = 'bg-emerald-600 text-white';
+        subMessage = `${diffDays}일 남음`;
+      }
+
+      return {
+        diffDays,
+        isPast,
+        badgeText,
+        badgeStyle,
+        subMessage,
+        formattedDue: `${year}.${String(month).padStart(2, '0')}.${String(day).padStart(2, '0')} ${time}`
+      };
+    }
+
+    // 과목명에 따른 고유한 파스텔 배경색 생성 (해시 기반 일관된 색상)
+    function getSubjectColor(subject) {
+      const colors = [
+        'bg-blue-100 text-blue-700 border-blue-200',
+        'bg-indigo-100 text-indigo-700 border-indigo-200',
+        'bg-violet-100 text-violet-700 border-violet-200',
+        'bg-purple-100 text-purple-700 border-purple-200',
+        'bg-teal-100 text-teal-700 border-teal-200',
+        'bg-cyan-100 text-cyan-700 border-cyan-200',
+        'bg-rose-100 text-rose-700 border-rose-200',
+        'bg-amber-100 text-amber-700 border-amber-200',
+      ];
+      let hash = 0;
+      for (let i = 0; i < subject.length; i++) {
+        hash = subject.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const index = Math.abs(hash) % colors.length;
+      return colors[index];
+    }
+
+    // 데이터 불러오기
+    function loadAssignments() {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          assignments = JSON.parse(stored);
+        } else {
+          // 최초 방문 시 샘플 과제 2개 자동 생성
+          const today = new Date();
+          const tomorrow = new Date(today);
+          tomorrow.setDate(today.getDate() + 2);
+          const nextWeek = new Date(today);
+          nextWeek.setDate(today.getDate() + 5);
+
+          const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+          assignments = [
+            {
+              id: 'init-1',
+              subject: '자료구조',
+              title: '이진 탐색 트리 구현 과제 제출',
+              dueDate: fmt(tomorrow),
+              dueTime: '23:59',
+              completed: false,
+              createdAt: Date.now() - 100000
+            },
+            {
+              id: 'init-2',
+              subject: '컴퓨터네트워크',
+              title: 'TCP/IP 패킷 덤프 분석 보고서 작성',
+              dueDate: fmt(nextWeek),
+              dueTime: '18:00',
+              completed: false,
+              createdAt: Date.now() - 200000
+            }
+          ];
+          saveAssignments();
+        }
+      } catch (e) {
+        console.error('로컬스토리지 로딩 오류:', e);
+        assignments = [];
+      }
+      renderAssignments();
+    }
+
+    // 데이터 저장
+    function saveAssignments() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(assignments));
+      } catch (e) {
+        console.error('로컬스토리지 저장 실패:', e);
+      }
+    }
+
+    // 과제 추가
+    function addAssignment(subject, title, dueDate, dueTime) {
+      const newAssignment = {
+        id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        subject: subject.trim(),
+        title: title.trim(),
+        dueDate: dueDate,
+        dueTime: dueTime || '23:59',
+        completed: false,
+        createdAt: Date.now()
+      };
+      assignments.unshift(newAssignment);
+      saveAssignments();
+      renderAssignments();
+      showToast('과제가 성공적으로 등록되었습니다!', 'success');
+    }
+
+    // 과제 삭제
+    function deleteAssignment(id) {
+      assignments = assignments.filter(item => item.id !== id);
+      saveAssignments();
+      renderAssignments();
+      showToast('과제가 삭제되었습니다.', 'info');
+    }
+
+    // 완료 토글
+    function toggleComplete(id) {
+      assignments = assignments.map(item => {
+        if (item.id === id) {
+          const nextState = !item.completed;
+          showToast(nextState ? '과제를 완료 처리했습니다! 🎉' : '과제를 다시 진행중으로 변경했습니다.', 'success');
+          return { ...item, completed: nextState };
+        }
+        return item;
+      });
+      saveAssignments();
+      renderAssignments();
+    }
+
+    // 과제 목록 렌더링
+    function renderAssignments() {
+      // 1. 카운트 뱃지 업데이트
+      const totalCount = assignments.length;
+      const completedCount = assignments.filter(a => a.completed).length;
+      const pendingCount = totalCount - completedCount;
+
+      document.getElementById('count-all').innerText = totalCount;
+      document.getElementById('count-pending').innerText = pendingCount;
+      document.getElementById('count-completed').innerText = completedCount;
+
+      // 2. 필터링
+      let filtered = [...assignments];
+      if (currentFilter === 'pending') {
+        filtered = filtered.filter(a => !a.completed);
+      } else if (currentFilter === 'completed') {
+        filtered = filtered.filter(a => a.completed);
+      }
+
+      // 3. 정렬 (마감일순 or 등록일순)
+      if (currentSort === 'deadline') {
+        filtered.sort((a, b) => {
+          // 완료된 건 항상 아래로
+          if (a.completed !== b.completed) return a.completed ? 1 : -1;
+          const timeA = new Date(`${a.dueDate}T${a.dueTime || '23:59'}`).getTime();
+          const timeB = new Date(`${b.dueDate}T${b.dueTime || '23:59'}`).getTime();
+          return timeA - timeB;
+        });
+      } else {
+        filtered.sort((a, b) => b.createdAt - a.createdAt);
+      }
+
+      // 4. 화면 출력
+      assignmentList.innerHTML = '';
+
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+        assignmentList.classList.add('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      assignmentList.classList.remove('hidden');
+
+      filtered.forEach(item => {
+        const dDayInfo = calculateDDay(item.dueDate, item.dueTime);
+        const subjectColorClass = getSubjectColor(item.subject);
+
+        const li = document.createElement('li');
+        li.className = `group bg-white rounded-2xl p-4 border transition-all duration-200 shadow-sm hover:shadow-md relative overflow-hidden ${
+          item.completed ? 'opacity-65 bg-slate-50 border-slate-200' : 'border-slate-200/90'
+        }`;
+
+        li.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <!-- 체크박스 및 제목 영역 -->
+            <div class="flex items-start gap-3 flex-1 min-w-0">
+              <button 
+                onclick="toggleComplete('${item.id}')"
+                class="mt-0.5 flex-shrink-0 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${
+                  item.completed 
+                    ? 'bg-emerald-500 border-emerald-500 text-white' 
+                    : 'border-slate-300 hover:border-indigo-500 text-transparent'
+                }"
+                aria-label="완료 체크"
+              >
+                <i class="fa-solid fa-check text-xs"></i>
+              </button>
+
+              <div class="flex-1 min-w-0">
+                <!-- 과목 뱃지 및 D-day 뱃지 -->
+                <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
+                  <span class="text-[11px] font-bold px-2 py-0.5 rounded-md border ${subjectColorClass}">
+                    ${escapeHtml(item.subject)}
+                  </span>
+                  ${
+                    item.completed 
+                      ? `<span class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200">완료됨</span>`
+                      : `<span class="text-[11px] font-bold px-2.5 py-0.5 rounded-md ${dDayInfo.badgeStyle}">${dDayInfo.badgeText}</span>`
+                  }
+                </div>
+
+                <!-- 과제 제목 -->
+                <p class="text-sm font-semibold text-slate-900 leading-snug break-words ${item.completed ? 'line-through text-slate-400' : ''}">
+                  ${escapeHtml(item.title)}
+                </p>
+
+                <!-- 마감 일시 정보 -->
+                <div class="flex items-center gap-1.5 text-xs text-slate-500 mt-2">
+                  <i class="fa-regular fa-clock text-[11px] text-slate-400"></i>
+                  <span>${dDayInfo.formattedDue}</span>
+                  <span class="text-slate-300">•</span>
+                  <span class="${!item.completed && dDayInfo.diffDays <= 1 && !dDayInfo.isPast ? 'text-rose-600 font-semibold' : ''}">
+                    ${item.completed ? '마감 완료' : dDayInfo.subMessage}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 삭제 버튼 -->
+            <button 
+              onclick="deleteAssignment('${item.id}')" 
+              class="text-slate-300 hover:text-rose-500 p-2 rounded-xl hover:bg-rose-50 transition active:scale-90"
+              title="과제 삭제"
+            >
+              <i class="fa-regular fa-trash-can text-sm"></i>
+            </button>
+          </div>
+        `;
+
+        assignmentList.appendChild(li);
+      });
+    }
+
+    // HTML 특수문자 이스케이프
+    function escapeHtml(string) {
+      return String(string)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // 필터 전환
+    window.setFilter = function(filter) {
+      currentFilter = filter;
+      
+      const tabs = ['all', 'pending', 'completed'];
+      tabs.forEach(tab => {
+        const btn = document.getElementById(`filter-${tab}`);
+        if (tab === filter) {
+          btn.className = 'flex-1 py-2 rounded-xl bg-slate-900 text-white font-semibold shadow-sm transition';
+        } else {
+          btn.className = 'flex-1 py-2 rounded-xl bg-slate-100 text-slate-600 font-medium hover:bg-slate-200 transition';
+        }
+      });
+
+      renderAssignments();
+    };
+
+    // 정렬 전환
+    sortToggleBtn.addEventListener('click', () => {
+      if (currentSort === 'deadline') {
+        currentSort = 'created';
+        sortLabel.innerText = '등록순';
+      } else {
+        currentSort = 'deadline';
+        sortLabel.innerText = '마감순';
+      }
+      renderAssignments();
+    });
+
+    // 모달 열기
+    function openModal() {
+      modalBackdrop.classList.remove('hidden');
+      setTimeout(() => {
+        modalBox.classList.remove('translate-y-full');
+      }, 10);
+      subjectInput.focus();
+    }
+
+    // 모달 닫기
+    function closeModal() {
+      modalBox.classList.add('translate-y-full');
+      setTimeout(() => {
+        modalBackdrop.classList.add('hidden');
+        addAssignmentForm.reset();
+        updateCurrentDateHeader();
+      }, 250);
+    }
+
+    openAddModalBtn.addEventListener('click', openModal);
+    closeModalBtn.addEventListener('click', closeModal);
+
+    // 모달 배경 클릭 시 닫기
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) {
+        closeModal();
+      }
+    });
+
+    // 추천 과목 칩 클릭 이벤트
+    document.querySelectorAll('.quick-chip').forEach(chip => {
+      chip.addEventListener('click', (e) => {
+        subjectInput.value = e.target.innerText;
+        titleInput.focus();
+      });
+    });
+
+    // 폼 제출 이벤트
+    addAssignmentForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const subject = subjectInput.value;
+      const title = titleInput.value;
+      const dueDate = dueDateInput.value;
+      const dueTime = dueTimeInput.value;
+
+      if (!subject.trim() || !title.trim() || !dueDate) {
+        showToast('필수 항목을 모두 입력해주세요.', 'error');
+        return;
+      }
+
+      addAssignment(subject, title, dueDate, dueTime);
+      closeModal();
+    });
+
+    // 토스트 알림 표시 (alert 대용)
+    let toastTimeout = null;
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const toastMessage = document.getElementById('toastMessage');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMessage.innerText = message;
+
+      if (type === 'success') {
+        toastIcon.className = 'fa-solid fa-circle-check text-emerald-400';
+      } else if (type === 'error') {
+        toastIcon.className = 'fa-solid fa-triangle-exclamation text-rose-400';
+      } else {
+        toastIcon.className = 'fa-solid fa-circle-info text-sky-400';
+      }
+
+      toast.classList.remove('opacity-0', '-translate-y-3', 'pointer-events-none');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', '-translate-y-3', 'pointer-events-none');
+      }, 2400);
+    }
+
+    // 앱 초기화 실행
+    window.addEventListener('DOMContentLoaded', () => {
+      updateCurrentDateHeader();
+      loadAssignments();
+    });
+  </script>
+</body>
+</html>
